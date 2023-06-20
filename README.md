@@ -8,14 +8,14 @@ The scripts are ordered in the way the material is taught. Throughout the course
 
 The following list connects the corresponding files:
 
-* Day 1: intro to CSS and ethical considerations ([slides: Intro to CSS](), [slides: Logistics](), [slides: Ethical considerations](), [R material]()
-* Day 2: scraping the web ([slides: scraping structured format](), [R material]()
-* Day 3: scraping unstructured content from the web ([slides](), [R material]())
-* Day 4: NLP I ([slides on regexes](sicss2022-day4.1_unstructured), [slides on text as data](), [R material]())
-* Day 5: NLP II ([slides](), [R material]())
-* Day 6: NLP III ([slides](), [R material]())
-* Day 7: NLP IV
+* Day 1: intro to CSS and ethical considerations ([slides: Intro to CSS](), [slides: Ethical considerations]())
+* Day 2: building crawlers ([slides: building crawlers](), [R material]()
+* Day 3: scraping structured content from the web ([slides](), [R material]())
+* Day 4: scraping unstructured content from the web ([slides](), [R material]())
+* Day 5: NLP I ([slides on regexes](sicss2022-day4.1_unstructured), [slides on text as data](), [R material]())
+* Day 6: NLP II ([slides](), [R material]())
+* Day 7: NLP III ([slides](), [R material]())
 * Day 8: The Augmented Social Scientist
 
 
-The solutions to the exercises are included in the script. You can use [this RMD file]() to get the "raw exercises" without solutions. 
+The solutions to the exercises are included in the bookdown script but not in the "raw" RMD scripts. You can use [this RMD file]() to get the "raw exercises" without solutions. 
