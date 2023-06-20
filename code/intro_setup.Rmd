@@ -1,0 +1,105 @@
+# Introduction 
+
+Dear student, 
+
+if you read this script, you are either participating in the SICSS itself or came across it while browsing for resources for your studies. In any case, if you find inconsistencies or mistakes, please do not hesitate to point them out by shooting an email to <felix.lennert@ensae.fr>.
+
+## Setup procedure
+
+For now, the only package you will need for running the script is `needs`. It will take care of the installation of the necessary package at the beginning of each page.
+
+### Registration for API usage
+
+In the section on APIs, we will play with the New York Times API. If you want to follow the script on your machine, you need to sign up for access and acquire an API key. Find instructions for registering [here](https://developer.nytimes.com/get-started).
+
+### Docker for `RSelenium` 
+
+When you work with `RSelenium`, what happens is that you simulate a browser which you then control through R. For multiple reasons, the preferred procedure is to run the headless browser in a Docker container, a virtual machine inside your laptop. Hence, if you are planning on using `RSelenium`, you should install Docker first and follow [this tutorial](https://callumgwtaylor.github.io/post/using-rselenium-and-docker-to-webscrape-in-r-using-the-who-snake-database/) to set it up properly. (Please note that if you're on a non-Intel Mac, like one of the authors of this script, you will have to use a different container -- check this [link](https://github.com/seleniumhq-community/docker-seleniarm).)
+
+## Some useful things
+
+We assume your familiarity with R. However, we are fully aware that coding styles (or "dialects") differ. Therefore, just a quick demonstration of some of the building blocks of the tidyverse.
+
+We use the new pipe -- `|>`. The pipe takes its argument on the left and forwards it to the next function, including it there as the first argument unless a `_` placeholder is provided somewhere. Note that the `_` placeholder only works with named arguments.
+
+```{r}
+library(magrittr)
+mean(c(2, 3)) == c(2, 3) |> mean()
+
+mtcars |> lm(mpg ~ cyl, data = _)
+# … is the same as…
+lm(mpg ~ cyl, data = mtcars)
+```
+
+The important terms in the `dplyr` package are `mutate()`, `select()`, `filter()`, `summarize()` (used with `group_by()`), and `arrange()`. `pull()` can be used to extract a vector. 
+
+```{r}
+needs(tidyverse)
+
+mtcars |>
+  rownames_to_column("model") |> # add rownames as a column
+  select(model, mpg, cyl, hp) |> # select 4 columns
+  arrange(cyl) |> # arrange them according to number of cylinders
+ # filter(cyl %in% c(4, 6)) |> # only retain values where condition is TRUE
+  mutate(model_lowercase = str_to_lower(model)) |> # change modelnames to lowercase
+  group_by(cyl) |> # change scope, effectively split up tibbles according to group_variable
+  summarize(mean_mpg = mean(mpg)) |> # drop all other columns, collapse rows
+  pull(cyl) # pull vector
+```
+
+We also will work with lists. Lesser known functions here come from the `purrr` package. On one hand, we have the `map()` family, which applies functions over lists, and `pluck()` which extracts elements from the list. 
+
+```{r}
+raw_list <- list(1:4, 4:6, 10:42)
+str(raw_list)
+
+map(raw_list, mean)
+map(raw_list, \(x) mean(x) |> sqrt())
+map_dbl(raw_list, mean) # by specifying the type of output, you can reduce the list
+
+raw_list |> pluck(1)
+```
+
+This can also be achieved using a loop. Here, you use an index to loop over objects and do something to their elements.
+
+```{r}
+for (p in seq_along(raw_list)){
+  raw_list[[p]] <- mean(raw_list[[p]])
+}
+```
+
+Another part of R is functions. They require arguments. Then they do something to these arguments. In the end, they return the last call (if it's not stored in an object). Otherwise, an object can be returned using `return()` -- this is usually unnecessary though.
+
+```{r}
+a_plus_b <- function(a, b){
+  a + b
+}
+
+a_plus_b(1, 2)
+
+a_plus_b <- function(a, b){
+ c <- a + b
+ return(c)
+}
+
+a_plus_b(1, 2)
+```
+
+## Further links
+
+Each chapter will contain a *Further links* section, where we include useful online resources which you can consume to delve deeper into the matters discussed in the respective chapter.
+
+* Further material for learning covering each section of this script can be found on the [RStudio website](https://rstudio.cloud/learn/primers).
+* A more accessible guide to singular tidyverse packages can be found in the `introverse` R package. Find instructions for how to install and use it [online](https://spielmanlab.github.io/introverse/index.html).
+* The [SICSS bootcamp](https://sicss.io/boot_camp/) gets you up and started promptly; wondering if you require a recap? – take the quizzes before going through the material.
+* The [R4DS book](https://r4ds.had.co.nz/) is a good mix of approachable introduction, technical description, real-world examples, and interesting exercises. You can read it in a superficial as well as in an in-depth manner. [Solutions for the exercises](https://jrnold.github.io/r4ds-exercise-solutions/) are available as well. The following chapters are relevant (ordered from most to least relevant): 2-4-6-5-3-7-11-27-14-15-16-19-21. 
+
+## Last but not least
+
+Learning R -- and programming in general -- is tough. More often than not, things will not go the way you want them to go. Mostly, this is due to minor typos or the fact that R is case-sensitive. However, don't fret. Only practice makes perfect. It is perfectly normal to not comprehend error messages. The following video illustrates this:
+
+```{r echo=FALSE}
+vembedr::embed_youtube("HluANRwPyNo")
+```
+
+If questions arise that a Google search cannot answer, we are always only one [email](mailto: felix.lennert@ensae.fr) away -- and will probably just hit Google right away, too, to figure something out for you.
