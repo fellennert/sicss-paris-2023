@@ -283,7 +283,7 @@ wiki_session_jumped <- wiki_session |>
 wiki_session_jumped |> session_history()
 ```
 
-2. Start a session on "https://secure.lemonde.fr/sfuser/connexion?redirectionUrl=https://abo.lemonde.fr/", fill out, and submit the form. Any value for login and password will do. (Disclaimer: you have to add the URL as an "action" attribute after creating the form, see [this thread](https://github.com/tidyverse/rvest/issues/319). -- so after extracting and setting the form, include and run `login_form$action <- url`) before submitting it.
+2. Start a session on "https://secure.lemonde.fr/sfuser/connexion", fill out, and submit the form. You will have to fill in a valid user name and password. 
 
 ```{r eval=FALSE}
 url <- "https://secure.lemonde.fr/sfuser/connexion"
