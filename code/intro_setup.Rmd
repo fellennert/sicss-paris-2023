@@ -23,7 +23,6 @@ We assume your familiarity with R. However, we are fully aware that coding style
 We use the new pipe -- `|>`. The pipe takes its argument on the left and forwards it to the next function, including it there as the first argument unless a `_` placeholder is provided somewhere. Note that the `_` placeholder only works with named arguments.
 
 ```{r}
-library(magrittr)
 mean(c(2, 3)) == c(2, 3) |> mean()
 
 mtcars |> lm(mpg ~ cyl, data = _)
