@@ -8,8 +8,8 @@ The scripts are ordered in the way the material is taught. Throughout the course
 
 The following list connects the corresponding files:
 
-* Day 1: intro to CSS and ethical considerations ([slides: Intro to CSS](), [slides: Ethical considerations]())
-* Day 2: building crawlers ([slides: building crawlers](), R material)
+* Day 1: intro to CSS and ethical considerations ([slides: Intro to CSS](slides/1.1-SICSS2023-WhatAreCSS.html), [slides: Ethical considerations](slides/1.2-SICSS2023-Ethics.html))
+* Day 2: building crawlers ([slides: building crawlers](slides/2-SICSS2023-Crawlers.html), [R material setup](code/intro_setup.Rmd), [R material crawlers and apis](code/crawlers_apis.Rmd))
 * Day 3: scraping structured content from the web (slides, R material)
 * Day 4: scraping unstructured content from the web (slides, R material)
 * Day 5: NLP I ([slides, R material)
