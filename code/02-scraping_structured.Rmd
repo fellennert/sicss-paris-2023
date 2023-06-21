@@ -495,6 +495,4 @@ while (session_page$response$status_code == 200) {
   i <- i + 1
   Sys.sleep(2)
 }
-
-## loop will break on its own, things will be stored in list anyways
 ```
