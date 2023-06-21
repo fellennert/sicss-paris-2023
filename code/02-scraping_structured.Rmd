@@ -447,7 +447,7 @@ movies <- tibble(
 ```
 </details>
 
-2. Scrape the 10 first movies of the most popular [Film noir movies ](https://www.imdb.com/search/title/?genres=Film-Noir&explore=genres&title_type=feature&ref_=ft_movie_10) in an automated fashion. Make sure to take breaks between requests by including `Sys.sleep(2)`.
+2. Scrape all the pages of the most popular [Film noir movies ](https://www.imdb.com/search/title/?genres=Film-Noir&explore=genres&title_type=feature&ref_=ft_movie_10) in an automated fashion. Make sure to take breaks between requests by including `Sys.sleep(2)`.
 
   a. Do so using running numbers in the urls (a bit tricky here). 
   b. Do so by using `session()` in a loop.
