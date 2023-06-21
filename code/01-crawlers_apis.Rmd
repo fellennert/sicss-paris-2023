@@ -188,7 +188,7 @@ A basic query is performed using the `GET()` function. However, first, you need 
 ```{r}
 needs(httr, jsonlite)
 #see overview here: https://developer.nytimes.com/docs/timeswire-product/1/overview
-key <- "xxx"
+#key <- "VvKJCO3XUt0Axj7dnilMrXUkjcAEkPEn"
 key <- Sys.getenv("nyt_key")
 
 nyt_headlines <- modify_url(
@@ -204,6 +204,7 @@ response
 When it comes to the [NYT news API](https://developer.nytimes.com/docs/timeswire-product/1/overview), there is the problem that the type of section is specified not in the query but in the endpoint path itself. Hence, if we were to scrape the different sections, we would have to change the path itself, e.g., through `str_c()`. 
 
 ```{r}
+needs(tidyverse)
 paths <- str_c("svc/news/v3/content/nyt/", c("business", "world"), ".json")
 
 map(paths, 
@@ -213,6 +214,8 @@ map(paths,
       query = list(`api-key` = key))
       )
     )
+
+map(1:3, \(x) x + 1)
 ```
 
 The `Status:` code you want to see here is `200` which stands for success. If you want to put it inside a function, you might want to break the function once you get a non-successful query. `http_error()` or `http_status()` are your friends here. 
@@ -247,9 +250,13 @@ writeLines(rawToChar(response$content))
 `jsonlite` helps us to bring this output into a data frame. 
 
 ```{r message=FALSE, warning=FALSE}
-response |> 
+tbl_nyt <- response |> 
   content(as = "text") |>
-  fromJSON()
+  jsonlite::fromJSON() 
+
+tbl_nyt |> as_tibble()
+tbl_nyt |> pluck(4)
+tbl_nyt[[4]]
 ```
 
 ### Dealing with authentification
@@ -257,7 +264,8 @@ response |>
 Well, as we saw before, we would have to put our official NYT API key publicly visible in this script. This is bad practice and should be avoided, especially if you work on a joint project (where everybody uses their code) or if you put your scripts in public places (such as GitHub). The `usethis` package can help you here.
 
 ```{r eval=FALSE}
-#usethis::edit_r_environ() # save key there
+needs(usethis)
+usethis::edit_r_environ() # save key there
 Sys.getenv("nyt_key")
 ```
 
@@ -303,5 +311,20 @@ base_session <- session("https://secure.lemonde.fr/sfuser/connexion") |>
 Bonus: Provide the key by using the `Sys.getenv` function. So, if somebody wants to work with your code and their own key, all they need to make sure is that they have the API key stored in the environment with the same name.
 
 ```{r}
+trump_nov_2016 <- modify_url(
+  url = "http://api.nytimes.com/",
+  path = "svc/search/v2/articlesearch.json",
+  query = list(q = "Trump",
+               begin_date = "20161101",
+               end_date = "20161110",
+               `api-key` = Sys.getenv("nyt_key"))
+) |> 
+  GET()
 
+trump_nov_2016_tbl <- trump_nov_2016 |> 
+  content(as = "text") |>
+  fromJSON() |> 
+  pluck(3, 1)
+
+trump_nov_2016_tbl[[3]][[1]]
 ```

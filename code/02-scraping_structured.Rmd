@@ -78,13 +78,13 @@ CSS is the abbreviation for cascading style sheets and is used to define the vis
 * `p` selects all `<p>` elements.
 
 ```{r}
-basic_html |> html_elements(css = "p")
+basic_html |> html_elements(xpath = "//p")
 ```
 
 * `.title` selects all elements that are of `class` "title"
 
 ```{r}
-basic_html |> html_elements(css = ".title")
+basic_html |> html_elements(xpath = "//title")
 ```
 
 There are no elements of `class` "title". But some of `class` "paragraph".
@@ -165,7 +165,7 @@ html <- minimal_html(
 ```{r}
 # html_text() returns the raw underlying text, which includes white space
 # that would be ignored by a browser, and ignores the <br>
-html |> html_element("p") |> html_text() |> writeLines()
+html |> html_element(xpath = "//p") |> html_text() |> writeLines()
 ```
 
 ```{r}
@@ -191,7 +191,9 @@ The general output format we strive for is a tibble. Oftentimes, data is already
 tables <- us_senators |> 
   html_table()
 
-#str(tables)
+str(tables)
+
+
 ```
 
 Here, the table I want is the sixth one. We can grab it by either using double square brackets -- `[[6]]` -- or `purrr`'s `pluck(6)`.
@@ -231,6 +233,8 @@ r_blogger_postings |> html_attrs()
 Links are stored as attribute "href" -- hyperlink reference. `html_attr()` allows me to extract the attribute's value. Hence, building a tibble with the article's title and its corresponding hyperlink is straight-forward now:
 
 ```{r}
+r_blogger_postings <- rbloggers |> html_elements(css = ".loop-title a")
+
 tibble(
   title = r_blogger_postings |> html_text2(),
   link = r_blogger_postings |> html_attr(name = "href")
@@ -240,6 +244,7 @@ tibble(
 Another approach for this would be using the `polite` package and its function `html_attrs_dfr()` which binds together all the different attributes column-wise and the different elements row-wise.
 
 ```{r message=FALSE, warning=FALSE}
+needs(polite)
 rbloggers |> 
   html_elements(css = ".loop-title a") |> 
   html_attrs_dfr() |> 
@@ -411,31 +416,85 @@ If you have to rely on screen scraping, also ask yourself the question how you c
 
 ## Exercises
 
-1. Download all movies from the (IMDb Top250 best movies of all time list)[https://www.imdb.com/chart/top/?ref_=nv_mv_250]. Put them in a tibble with the columns `rank` -- in numeric format (if you know regexes already), `title`, `url` to IMDb entry, `rating` -- in numeric format.
 
-```{r}
+1. Download the links and names of the  [History TV shows](https://www.imdb.com/chart/top/?ref_=nv_mv_250). Put them in a tibble with the columns `rank` -- in numeric format (if you know regexes already), `title`, `url` to IMDb entry, `rating` -- in numeric format.
+
+<details>
+  <summary>Solution. Click to expand!</summary>
+
+```{r eval=FALSE}
 imdb_top250 <- read_html("https://www.imdb.com/chart/top/?ref_=nv_mv_250")
 
-
+movies <- tibble(
+  rank = imdb_top250 |> 
+    html_elements(".titleColumn") |> 
+    html_text2() |> 
+    str_extract("^[0-9]+(?=\\.)") |> 
+    parse_integer(),
+  title = imdb_top250 |> 
+    html_elements(".titleColumn a") |> 
+    html_text2(),
+  url = imdb_top250 |> 
+    html_elements(".titleColumn a") |> 
+    html_attr("href") %>%
+    str_c("https://www.imdb.com", .),
+  rating = imdb_top250 |> 
+    html_elements("strong") |> 
+    html_text() |> 
+    parse_double()
+)
 
 ```
+</details>
 
-2. Scrape the 10 first pages of [R-bloggers](https://www.r-bloggers.com) in an automated fashion. Make sure to take breaks between requests by including `Sys.sleep(2)`.
-  a. Do so using the url vector we created above.
-  b. Do so by getting the link for the next page and a loop.
-  c. Do so by using `session()` in a loop.
+2. Scrape the 10 first movies of the most popular [Film noir movies ](https://www.imdb.com/search/title/?genres=Film-Noir&explore=genres&title_type=feature&ref_=ft_movie_10) in an automated fashion. Make sure to take breaks between requests by including `Sys.sleep(2)`.
 
-```{r}
+  a. Do so using running numbers in the urls (a bit tricky here). 
+  b. Do so by using `session()` in a loop.
+
+<details>
+  <summary>Solution. Click to expand!</summary>
+  
+```{r eval=FALSE}
+url_2 <- "https://www.imdb.com/search/title/?title_type=feature&genres=film-noir&start=51&explore=genres&ref_=adv_prv"
+url_3 <- "https://www.imdb.com/search/title/?title_type=feature&genres=film-noir&start=101&explore=genres&ref_=adv_prv"
+
+initial_dist <- adist(url_2, url_3, counts = TRUE) |> 
+  attr("trafos") |> 
+  diag() |> 
+  str_locate_all("[^M]")
+
+  
+str_sub(url_2, start = initial_dist[[1]][1]-5, end = initial_dist[[1]][1]+5) # makes sense for longer urls
+str_sub(url_3, start = initial_dist[[1]][1]-5, end = initial_dist[[1]][1]+5)
 
 # a: check running number in URL, create new URLs, map()
 
+urls <- str_c("https://www.imdb.com/search/title/?title_type=feature&genres=film-noir&start=", 
+      seq(1, 982, by = 50), # determine number of potential results -- 982
+      "&explore=genres&ref_=adv_prv")
+
+urls |> map(read_html)
+
+# b: session()
+url <- "https://www.imdb.com/search/title/?genres=Film-Noir&explore=genres&title_type=feature&ref_=ft_movie_10"
+i <- 1
+content <- vector(mode = "list", length = 20L)
+session_page <- session(url)
+session_page$response$status_code
 
 
-# b: extract the next page and move forward in the loop
+while (session_page$response$status_code == 200) {
+  content[[i]] <- session_page |> 
+    read_html()
+  
+  if (next_missing <- content[[i]] |> html_elements(".next-page") |> is_empty()) break
+  
+  session_page <- session_page |> 
+    session_follow_link(css = ".next-page")
+  i <- i + 1
+  Sys.sleep(2)
+}
 
-
-
-# c: session()
-
-
+## loop will break on its own, things will be stored in list anyways
 ```
