@@ -10,7 +10,7 @@ The following list connects the corresponding files:
 
 * Day 1: intro to CSS and ethical considerations ([slides: Intro to CSS](slides/1.1-SICSS2023-WhatAreCSS.html), [slides: Ethical considerations](slides/1.2-SICSS2023-Ethics.html))
 * Day 2: building crawlers ([slides: building crawlers](slides/2-SICSS2023-Crawlers.html), [R material setup](code/00-intro_setup.Rmd), [R material crawlers and apis](code/01-crawlers_apis.Rmd))
-* Day 3: scraping structured content from the web ([slides: structured scraping](slides/3-SICSS2023-Structured.html), [R material](code/02-scraping_structured.html))
+* Day 3: scraping structured content from the web ([slides: structured scraping](slides/3-SICSS2023-Structured.html), [R material](code/02-scraping-structured.html))
 * Day 4: scraping unstructured content from the web (slides, R material)
 * Day 5: NLP I ([slides, R material)
 * Day 6: NLP II (slides, R material)
