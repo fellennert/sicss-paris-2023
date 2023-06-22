@@ -495,4 +495,43 @@ while (session_page$response$status_code == 200) {
   i <- i + 1
   Sys.sleep(2)
 }
+
+extract_content <- function(page){
+  tbl <- tibble(
+    rank = page |> 
+      html_elements(".text-primary") |> 
+      html_text2(),
+   title = page |> 
+      html_elements(".lister-item-header a") |> 
+      html_text2(),
+   url = page |> 
+      html_elements(".lister-item-header a") |> 
+      html_attr("href") |> 
+      str_c("https://www.imdb.com", x = _),
+   year = page |> 
+      html_elements(".text-muted.unbold") |> 
+      html_text2()
+   )
+  
+  rating <- page |> 
+      html_elements(".ratings-imdb-rating strong") |> 
+      html_text2() |> 
+      parse_double()
+  
+  if (length(rating) == 50){
+    return(tbl |> mutate(rating = rating))
+  }else{
+    return(list(tbl, rating))
+  }
+}
+
+film_noir_tbl <- map(content, extract_content)
+
+film_noir_tbl[[19]][[2]] <- c(film_noir_tbl[[19]][[2]][1:10], NA, film_noir_tbl[[19]][[2]][11:49])
+film_noir_tbl[[20]][[2]] <- c(film_noir_tbl[[20]][[2]][1:26], NA, film_noir_tbl[[20]][[2]][27:32])
+
+film_noir_tbl[[19]] <- film_noir_tbl[[19]][[1]] |> mutate(rating = film_noir_tbl[[19]][[2]])
+film_noir_tbl[[20]] <- film_noir_tbl[[20]][[1]] |> mutate(rating = film_noir_tbl[[20]][[2]])
+
+film_noir_tbl |> bind_rows()
 ```
