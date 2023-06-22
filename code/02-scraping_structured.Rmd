@@ -416,11 +416,7 @@ If you have to rely on screen scraping, also ask yourself the question how you c
 
 ## Exercises
 
-
 1. Download the links and names of the  [History TV shows](https://www.imdb.com/chart/top/?ref_=nv_mv_250). Put them in a tibble with the columns `rank` -- in numeric format (if you know regexes already), `title`, `url` to IMDb entry, `rating` -- in numeric format.
-
-<details>
-  <summary>Solution. Click to expand!</summary>
 
 ```{r eval=FALSE}
 imdb_top250 <- read_html("https://www.imdb.com/chart/top/?ref_=nv_mv_250")
@@ -445,15 +441,11 @@ movies <- tibble(
 )
 
 ```
-</details>
 
 2. Scrape all the pages of the most popular [Film noir movies ](https://www.imdb.com/search/title/?genres=Film-Noir&explore=genres&title_type=feature&ref_=ft_movie_10) in an automated fashion. Make sure to take breaks between requests by including `Sys.sleep(2)`.
 
   a. Do so using running numbers in the urls (a bit tricky here). 
   b. Do so by using `session()` in a loop.
-
-<details>
-  <summary>Solution. Click to expand!</summary>
   
 ```{r eval=FALSE}
 url_2 <- "https://www.imdb.com/search/title/?title_type=feature&genres=film-noir&start=51&explore=genres&ref_=adv_prv"
