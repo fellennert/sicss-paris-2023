@@ -3,6 +3,7 @@
 After having learned about the basics of string manipulation, we are now turning to how you can turn your collection of documents, your corpus, into a representation that lends itself nicely to quantitative analyses of text. There are a couple of packages around which you can use for text mining, such as `quanteda` [@benoit_quanteda_2018], `tm` [@feinerer_text_2008], and `tidytext` [@silge_tidytext_2016], the latter being probably the most recent addition to them. A larger overview of relevant packages can be found on this [CRAN Task View](https://cran.r-project.org/web/views/NaturalLanguageProcessing.html).
 
 As you could probably tell from its name, `tidytext` obeys the tidy data principles^[Each observation has its own row, each variable its own column, each value has its own cell, find more [here](https://cfss.uchicago.edu/notes/tidy-data/)]. "Every observation is a row" translates here to "every token has its own row" -- "token" not necessarily relating to a singular term, but also so-called n-grams. In the following, we will demonstrate what text mining using tidy principles can look like in R. For this, we will first cover the preprocessing of text using tidy data principles. Thereafter, we will delve into more advanced preprocessing such as the lemmatization of words and part-of-speech (POS) tagging using `spaCy` [@honnibal_spacy_2017]. Finally, different R packages are using different representations of text data. Depending on the task at hand, you will therefore have to be able to transform the data into the proper format. This will be covered in the final part.
+
 ## Pre-processing with `tidytext`
 
 The `sotu` package contains all of the so-called "State of the Union" addresses -- the president gives them to the congress annually -- since 1790.
@@ -59,8 +60,8 @@ The new tibble consists of `r sotu_20cent_tokenized |> nrow()` rows. Please note
 The next step is to remove stop words -- they are not necessary for the analyses I want to perform. The `stopwords` package has a nice list for English.
 
 ```{r}
-library(stopwords)
 stopwords_vec <- stopwords(language = "en")
+stopwords_vec_filtered <- stopwords_vec[!stopwords_vec %in% "in"]
 #stopwords(language = "de") # the german equivalent
 #stopwords_getlanguages() # find the languages that are available
 ```
@@ -76,10 +77,10 @@ Another thing I forgot to remove are digits. They do not matter for the analyses
 
 ```{r}
 sotu_20cent_tokenized_nostopwords_nonumbers <- sotu_20cent_tokenized_nostopwords |> 
-  filter(!str_detect(token, "[:digit:]"))
+  filter(!str_detect(token, "[0-9]"))
 ```
 
-The corpus now contains `r sotu_20cent_tokenized_nostopwords_nonumbers |> distinct(token) |> nrow()` different tokens, the so-called "vocabulary." `r (sotu_20cent_tokenized |> distinct(token) |> nrow()) - (sotu_20cent_tokenized_nostopwords_nonumbers |> distinct(token) |> nrow())` tokens were removed from the vocuabulary. This translates to a signifiant reduction in corpus size though, the new tibble only consists of `r sotu_20cent_tokenized_nostopwords_nonumbers |> nrow()` rows, basically a 50 percent reduction. 
+The corpus now contains `r sotu_20cent_tokenized_nostopwords_nonumbers |> distinct(token) |> nrow()` different tokens, the so-called "vocabulary." `r (sotu_20cent_tokenized |> distinct(token) |> nrow()) - (sotu_20cent_tokenized_nostopwords_nonumbers |> distinct(token) |> nrow())` tokens were removed from the vocabulary. This translates to a signifigant reduction in corpus size though, the new tibble only consists of `r sotu_20cent_tokenized_nostopwords_nonumbers |> nrow()` rows, basically a 50 percent reduction. 
 
 ### Stemming
 
@@ -98,7 +99,7 @@ Maybe I should also remove insignificant words, i.e., ones that appear less than
 n_rows <- nrow(sotu_20cent_tokenized_nostopwords_nonumbers_stemmed)
 sotu_20cent_tokenized_nostopwords_nonumbers_stemmed |> 
   group_by(token) |> 
-  filter(n() > n_rows/200)
+  filter(n() > n_rows/2000)
 ```
 
 These steps have brought down the vocabulary from `r sotu_20cent_tokenized_nostopwords_nonumbers |> distinct(token) |> nrow()` to `r sotu_20cent_tokenized_nostopwords_nonumbers_stemmed |> distinct(token_stemmed) |> nrow()`.
@@ -111,7 +112,7 @@ Well, all those things could also be summarized in one nice cleaning pipeline:
 sotu_20cent_clean <- sotu_raw |> 
   filter(between(year, 1900, 2000)) |> 
   unnest_tokens(output = token, input = text) |> 
-  anti_join(get_stopwords(), by = c("token" = "word")) |> 
+  filter(!token %in% stopwords_vec) |> 
   filter(!str_detect(token, "[0-9]")) |> 
   mutate(token = wordStem(token, language = "en")) 
 ```
@@ -134,8 +135,8 @@ In brief, preprocessing with `spaCyr` is computationally more expensive than usi
 ### Initializing spaCy
 
 Before using `spaCyr`, it needs to be initialized. What happens during this process is that R basically opens a connection to Python so that it can then run the `spaCyr` functions in Python's `spaCy`. Once you have set up everything properly (see [instructions](https://spacyr.quanteda.io/articles/using_spacyr.html)), you can initialize it using `spacy_initialize(model)`. Different language models can be specified and an overview can be found [here](https://spacy.io/usage/models#languages). Note that a process of `spaCy` is started when you `spacy_initialize()` and continues running in the background. Hence, once you don't need it anymore, or want to load a different model, you should `spacy_finalize()`. 
+
 ```{r}
-library(spacyr)
 spacy_initialize(model = "en_core_web_sm")
 # to download new model -- here: French
 #spacy_finalize()
@@ -245,7 +246,6 @@ spacy_extract_entity(sotu_speeches_tif |> slice(1:3))
 spacy_extract_nounphrases(sotu_speeches_tif |> slice(1:3))
 ```
 
-
 Similar things (and more!) can also be achieved with `spaCy` [@honnibal_spacy_2017]. `spacyr` [@benoit_spacyr_2020] is an R wrapper around the `spaCy` Python package and, therefore, a bit tricky to install at first, you can find instructions [here](https://spacyr.quanteda.io/articles/using_spacyr.html). 
 
 The functionalities `spacyr` offers you are the following^[overview copied from their webpage]: 
@@ -314,7 +314,7 @@ fairytales_top10_nostop |>
   geom_col(aes(x = n, y = reorder_within(token, n, book))) +
   scale_y_reordered() +
   labs(y = "token") +
-  facet_wrap(vars(book), scales = "free_y") +
+  facet_wrap(vars(book), scales = "free") +
   scale_x_continuous(breaks = scales::pretty_breaks()) +
   theme(strip.text.x = element_blank())
 ```
@@ -516,7 +516,7 @@ This results in a tibble that contains the relevant metadata and a `text` column
 
 ### Preprocessing
 
-1. Download Twitter timeline data (``. Let's look at abortion-related tweets and how the language may differ between parties. Filter relevant tweets using a vector of keywords and a regular expression (hint: `filter(str_detect(text, str_c(keywords, collapse = "|")))`). Preprocess the Tweets as follows: 
+1. Download Twitter timeline data. Let's look at abortion-related tweets and how the language may differ between parties. Filter relevant tweets using a vector of keywords and a regular expression (hint: `filter(str_detect(text, str_c(keywords, collapse = "|")))`). Preprocess the Tweets as follows: 
   a. Unnest the tokens.
   b. Remove stop words. 
   c. Perform stemming. 
@@ -528,7 +528,11 @@ keywords <- c("abortion", "prolife", " roe ", " wade ", "roevswade", "baby", "fe
 #filter(str_detect(text, str_c(keywords, collapse = "|"))) for keyword-based filtering
 ```
 ```{r}
-
+preprocessed <- timelines |> 
+  filter(str_detect(text, str_c(keywords, collapse = "|"))) |> 
+  unnest_tokens(word, text) |> 
+  filter(!word %in% stopwords_vec) |> 
+  mutate(stemmed = wordStem(word))
 ```
 
 
@@ -538,21 +542,119 @@ keywords <- c("abortion", "prolife", " roe ", " wade ", "roevswade", "baby", "fe
 
 3. Count the terms per party. 
   a. Do you see party-specific differences with regard to their ten most common terms (hint: use `group_by()` before using `slice_max(tf_idf, n = 10, with_ties = FALSE)`)? 
+```{r}
+df <- preprocessed |> 
+  count(stemmed, party) |> 
+  group_by(party) |> 
+  slice_max(n, n = 10, with_ties = FALSE)
+  
+df |> 
+  group_by(party) |> 
+  ggplot()  +
+    geom_col(aes(x = n, y = reorder_within(stemmed, n, party))) +
+    scale_y_reordered() +
+    labs(y = "token") +
+    facet_wrap(vars(party), scales = "free") 
+```
+  
 
   b. Is there more words you should add to your stopwords list? Remove these terms using `filter(str_detect())` and a regex.
+  
+```{r}
+more_stopwords <- c("t.co", "http", "amp") 
+df |> 
+  filter(!str_detect(stemmed, str_c(more_stopwords, collapse = "|"))) |> 
+  group_by(party) |> 
+  ggplot()  +
+    geom_col(aes(x = n, y = reorder_within(stemmed, n, party))) +
+    scale_y_reordered() +
+    labs(y = "token") +
+    facet_wrap(vars(party), scales = "free") 
+```
+  
 
   c. Do the same thing but using the spacy output and filtering only `NOUN`s and `PROPN`ouns. 
 
 ```{r}
 timelines_spacy <- read_rds("https://github.com/fellennert/sicss-paris-2023/raw/main/code/timelines_spacy.rds")
+
+timelines_spacy |> 
+  filter(pos %in% c("PROPN", "NOUN")) |> 
+  left_join(timelines_meta |> mutate(doc_id = as.character(doc_id)), by = "doc_id") |> 
+  count(token, party) |>
+  group_by(party) |> 
+  slice_max(n, n = 10, with_ties = FALSE) |> 
+  ggplot()  +
+    geom_col(aes(x = n, y = reorder_within(token, n, party))) +
+    scale_y_reordered() +
+    labs(y = "token") +
+    facet_wrap(vars(party), scales = "free") 
 ```
 
   d. Again, is there stuff to be removed? Do so using a Regex.
   
+```{r}
+timelines_spacy |> 
+  filter(pos %in% c("PROPN", "NOUN"),
+         !str_detect(token, "^@|[^a-z]|^amp$")) |> 
+  left_join(timelines_meta |> mutate(doc_id = as.character(doc_id)), by = "doc_id") |> 
+  count(token, party) |>
+  group_by(party) |> 
+  slice_max(n, n = 10, with_ties = FALSE) |> 
+  ggplot()  +
+    geom_col(aes(x = n, y = reorder_within(token, n, party))) +
+    scale_y_reordered() +
+    labs(y = "token") +
+    facet_wrap(vars(party), scales = "free") 
+```
+  
+  
 4. Do the same thing as in 3. but use TF-IDF instead of raw counts. How does this alter your results?
+```{r}
+df_tf_idf <- preprocessed |> 
+  count(word, party) |> 
+  bind_tf_idf(word, party, n) |> 
+  group_by(party) |> 
+  slice_max(tf_idf, n = 10, with_ties = FALSE)
+  
+df_tf_idf |> 
+  group_by(party) |> 
+  ggplot()  +
+    geom_col(aes(x = tf_idf, y = reorder_within(word, tf_idf, party))) +
+    scale_y_reordered() +
+    labs(y = "token") +
+    facet_wrap(vars(party), scales = "free")
+
+timelines_spacy |> 
+  filter(pos %in% c("PROPN", "NOUN")) |> 
+  left_join(timelines_meta |> mutate(doc_id = as.character(doc_id)), by = "doc_id") |> 
+  count(token, party) |>
+  filter(str_detect(token, "[a-z]")) |> 
+  filter(!str_detect(token, "^@")) |> 
+  bind_tf_idf(token, party, n) |> 
+  group_by(party) |> 
+  slice_max(n, n = 10, with_ties = FALSE) |> 
+  ggplot()  +
+    geom_col(aes(x = tf_idf, y = reorder_within(token, tf_idf, party))) +
+    scale_y_reordered() +
+    labs(y = "token") +
+    facet_wrap(vars(party), scales = "free") 
+```
+
+
 
 5. What else could you have done in terms of pre-processing (think of the special characters and syntax Twitter uses here)?
 
 * Remove @… -- Regex: "[@][a-zA-Z0-9_]+"
 * Extract hashtags -- Regex: "[#][a-zA-Z0-9_]+"
+
+```{r}
+string <- "@FelixLennert checks if this works #sicss2023"
+
+str_remove_all(string, "[@][a-zA-Z0-9_]+")
+str_extract(string, "[#][a-zA-Z0-9_]+")string <- "@FelixLennert checks if this works #sicss2023"
+
+str_remove_all(string, "[@][a-zA-Z0-9_]+")
+str_extract(string, "[#][a-zA-Z0-9_]+")
+```
 
