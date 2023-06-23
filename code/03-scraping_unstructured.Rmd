@@ -515,19 +515,26 @@ str_sub(film_noir_tbl$rank, start = -1) <- ""
 2. Remove the dot in the ranking column using a Regex.
 
 ```{r}
-film_noir_tbl
+film_noir_tbl |> 
+  mutate(rank = str_remove(rank, "\\."))
 ```
 
 3. Write a regex for Swedish mobile numbers. Test it with `str_detect("+46 71-738 25 33", "[insert your regex here]")`. 
 
 ```{r eval=FALSE}
-str_detect("+46 71-738 25 33", "your regex here")
+str_detect("+46 71-738 25 33", "\\+46 [0-9]{2}\\-[0-9]{3} [0-9]{2} [0-9]{2}")
 ```
 
 4. Replace m and cm appropriately in the vector of heights.
 
 ```{r}
 heights <- c("1m30cm", "2m01cm", "3m10cm")
+
+str_replace_all(heights, c("(?<=[2-9]{1})m" = "meters", 
+                           "(?<=[0-9]{2})m" = "meters", 
+                           "(?<=1)m" = "meter", 
+                           "(?<=01)cm$" = "centimeter", 
+                           "cm$" = "centimeters"))
 ```
 
 5. Download the Senator table and clean it up. 
@@ -536,7 +543,7 @@ heights <- c("1m30cm", "2m01cm", "3m10cm")
   c. Bonus: fix their "occupation" by separating the single jobs (combine look-ahead and -behind for that.)
 
 ```{r}
-needs(rvest, janitor, lubridate)
+needs(rvest, janitor, lubridate, tidyverse)
 
 senator_table_raw <- read_html("https://en.wikipedia.org/wiki/List_of_current_United_States_senators") |> 
   html_elements(css = "#senators") |> 
@@ -545,5 +552,13 @@ senator_table_raw <- read_html("https://en.wikipedia.org/wiki/List_of_current_Un
   clean_names() |> 
   select(state, senator, party = party_2, born, occupations = occupation_s, assumed_office)
 
+#a;b
+senator_table_cleaned <- senator_table_raw |> 
+  mutate(party = str_remove_all(party, "\\[.\\]|\\(.+\\)"),
+         born = str_extract(born, "19[0-9]{2}\\-[01][0-9]\\-[0-3][0-9]") |> ymd())
+
+#c
+occ_cleaned <- senator_table_cleaned |> 
+  mutate(occupation_clean = str_replace_all(occupations, c("(?<=[a-z])(?=[A-Z])" = "; ", "CEO" = "CEO ")))
 ```
 

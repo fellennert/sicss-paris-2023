@@ -1230,6 +1230,4 @@ string <- "@FelixLennert checks if this works #sicss2022"
 str_remove_all(string, "[@][a-zA-Z0-9_]+")
 str_extract(string, "[#][a-zA-Z0-9_]+")
 ```
-
-
 </details>
