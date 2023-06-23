@@ -1,8 +1,8 @@
-# Text preprocessing {#day4}
+# Extracting Unstructured Content {#day4}
 
 When working with data, a significant number of variables will be in some sort of text format. When you want to manipulate these variables, an easy approach would be exporting the data to MS Excel and then just performing those manipulations by hand. This is very time-consuming, though, and, hence, we rather recommend the R way which scales well and works fast for data sets of varying sizes.
 
-Quick reminder: a string is an element of a character vector and can be created by simply wrapping some text in quotation marks:
+Quick reminder: a string is an element of a character vector and can be created by simply wrapping some text in quotation marks.
 
 ```{r}
 string <- "Hi, how are you doing?"
@@ -80,7 +80,7 @@ str_c("Hi", names, "I hope you're doing well. As per this letter, I invite you t
 Well, this looks kind of ugly, as there are no spaces, and commas are lacking as well. You can fix that by determining a separator using the `sep` argument. 
 
 ```{r}
-str_c("Hi", names, "I hope you're doing well. As per this letter, I invite you to my birthday party.", sep = ", ")
+str_c("Hi", names, places, "I hope you're doing well. As per this letter, I invite you to my birthday party.", sep = ", ")
 ```
 
 You could also collapse the strings contained in a vector together into one single string using the `collapse` argument. 
@@ -210,6 +210,8 @@ In our case, the appropriate one is `+`:
 
 ```{r}
 str_detect(stringr_functions, "str_.+_all")
+
+str_extract("papaaaaaaaul", "pa+")
 ```
 
 However, if you want to match the character "."? This problem may arise when searching for clock time. A naive regex might look like this:
@@ -242,6 +244,8 @@ str_view(sp_ce, "sp[ai]ce")
 
 ```{r eval=FALSE, include=FALSE}
 str_c(sp_ce, collapse = "\n") |> cat()
+
+
 ```
 
 You can also define certain ranges of characters using the `-` metacharacter:
@@ -282,7 +286,7 @@ There is also a way to define whether you want the pattern to be present in the 
 ```{r}
 shortened_sentences <- sentences[1:10]
 
-str_view(shortened_sentences, "^The") 
+str_detect(shortened_sentences, "^The") 
 ```
 
 ```{r eval=FALSE, include=FALSE}
@@ -413,7 +417,7 @@ What becomes obvious is that a "simple" regex containing just literal characters
 ```{r}
 mtcars |> 
   rownames_to_column(var = "car_model") |> 
-  transmute(manufacturer = str_extract(car_model, "^\\w+\\b")) |> 
+  transmute(manufacturer = str_extract(car_model, "^[A-Za-z]+\\b")) |> 
   head(6)
 ```
 
@@ -423,7 +427,7 @@ Another use case here would have been to split it into two columns: manufacturer
 
 ```{r}
 manufacturer_model <- rownames(mtcars)
-str_split(manufacturer_model, " ") |> 
+str_split_fixed(manufacturer_model, " ", n = 2) |> 
   head()
 ```
 
@@ -498,8 +502,14 @@ film_noir_list[[20]][[2]] <- c(film_noir_list[[20]][[2]][1:26], NA, film_noir_li
 film_noir_list[[19]] <- film_noir_list[[19]][[1]] |> mutate(rating = film_noir_list[[19]][[2]])
 film_noir_list[[20]] <- film_noir_list[[20]][[1]] |> mutate(rating = film_noir_list[[20]][[2]])
 
-film_noir_tbl <- film_noir_list |> bind_rows()
+film_noir_tbl <- film_noir_tbl |> bind_rows()
 
+# fix year
+film_noir_tbl |> 
+  mutate(year = str_sub(year, start = 2, end = 5) |> 
+           as.double())
+# fix dot
+str_sub(film_noir_tbl$rank, start = -1) <- ""
 ```
 
 2. Remove the dot in the ranking column using a Regex.
