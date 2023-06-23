@@ -8,7 +8,7 @@ As you could probably tell from its name, `tidytext` obeys the tidy data princip
 The `sotu` package contains all of the so-called "State of the Union" addresses -- the president gives them to the congress annually -- since 1790.
 
 ```{r message=FALSE, warning=FALSE}
-needs(hcandersenr, sotu, spacyr, stopwords, tidyverse, tidyext)
+needs(hcandersenr, sotu, spacyr, stopwords, tidyverse, tidytext)
 library(tidyverse)
 library(sotu)
 sotu_raw <- sotu_meta |> 
@@ -95,7 +95,7 @@ sotu_20cent_tokenized_nostopwords_nonumbers_stemmed <- sotu_20cent_tokenized_nos
 #SnowballC::getStemLanguages() # if you want to know the abbreviations for other languages as well
 ```
 
-Maybe I should also remove insignificant words, i.e., ones that appear less than 0.5 percent of the time. 
+Maybe I should also remove insignificant words, i.e., ones that appear less than 0.05 percent of the time. 
 
 ```{r}
 n_rows <- nrow(sotu_20cent_tokenized_nostopwords_nonumbers_stemmed)
@@ -160,9 +160,11 @@ tif_toy_example <- tibble(
 )
 
 toy_example_vec <- tif_toy_example$text
+
+spacy_parse(tif_toy_example)
 ```
 
-The output of `spacy_parse()` looks as follows:
+The output of `spacy_parse()` and the sotu-speeches looks as follows:
 
 ```{r}
 sotu_speeches_tif <- sotu_meta |> 
@@ -184,7 +186,8 @@ sotu_parsed <- spacy_parse(sotu_speeches_tif,
                            nounphrase = TRUE,
                            multithread = TRUE)
 
-sotu_parsed
+# if you haven't installed spacy yet, uncomment and run the following line
+#sotu_parsed <- read_rds("https://github.com/fellennert/sicss-paris-2023/raw/main/code/sotu_parsed.rds")
 ```
 
 Note that this is already fairly similar to the output of `tidytext`'s `unnest_tokens()` function. The advantages are that the lemmas are more accurate, that we have a new sub-entity -- sentences --, and that there is now more information on the type and meanings of the words. 
@@ -223,6 +226,7 @@ To properly represent entities in our corpus, you can use `entity_consolidate()`
 ```{r}
 entity_consolidate(sotu_parsed)
 ```
+
 If you want to extract only nouns, you can simply filter them.
 
 ```{r}
@@ -230,6 +234,7 @@ sotu_parsed |>
   entity_consolidate() |> 
   filter(pos == "NOUN")
 ```
+
 However, a better way is to extract the "complete" noun phrases:
 
 ```{r}
@@ -243,8 +248,6 @@ spacy_extract_entity(sotu_speeches_tif |> slice(1:3))
 spacy_extract_nounphrases(sotu_speeches_tif |> slice(1:3))
 ```
 
-
-## Preprocessing with `spaCy`
 
 Similar things (and more!) can also be achieved with `spaCy` [@honnibal_spacy_2017]. `spacyr` [@benoit_spacyr_2020] is an R wrapper around the `spaCy` Python package and, therefore, a bit tricky to install at first, you can find instructions [here](https://spacyr.quanteda.io/articles/using_spacyr.html). 
 
@@ -443,21 +446,23 @@ This results in a tibble that contains the relevant metadata and a `text` column
 
 ### Preprocessing
 
-1. Download Twitter timeline data (`timelines <- read_csv("https://www.dropbox.com/s/dpu5m3xqz4u4nv7/tweets_house_rep_party.csv?dl=1") |> filter(!is.na(party))`. Let's look at abortion-related tweets and how the language may differ between parties. Filter relevant tweets using a vector of keywords and a regular expression (hint: `filter(str_detect(text, str_c(keywords, collapse = "|")))`). Preprocess the Tweets as follows: 
+1. Download Twitter timeline data (``. Let's look at abortion-related tweets and how the language may differ between parties. Filter relevant tweets using a vector of keywords and a regular expression (hint: `filter(str_detect(text, str_c(keywords, collapse = "|")))`). Preprocess the Tweets as follows: 
   a. Unnest the tokens.
   b. Remove stop words. 
   c. Perform stemming. 
+
+```{r}
+timelines <- read_csv("https://www.dropbox.com/s/dpu5m3xqz4u4nv7/tweets_house_rep_party.csv?dl=1") |> filter(!is.na(party))
+ 
+keywords <- c("abortion", "prolife", " roe ", " wade ", "roevswade", "baby", "fetus", "womb", "prochoice", "leak")
+#filter(str_detect(text, str_c(keywords, collapse = "|"))) for keyword-based filtering
+```
+
 
 <details>
   <summary>Solution. Click to expand!</summary>
 
 ```{r eval=FALSE}
-library(tidytext)
-library(stopwords)
-library(SnowballC)
-
-keywords <- c("abortion", "prolife", " roe ", " wade ", "roevswade", "baby", "fetus", "womb", "prochoice", "leak")
-
 preprocessed <- timelines |> 
   filter(str_detect(text, str_c(keywords, collapse = "|"))) |> 
   unnest_tokens(word, text) |> 
@@ -474,7 +479,6 @@ preprocessed <- timelines |>
   <summary>Solution. Click to expand!</summary>
 
 ```{r eval=FALSE}
-library(spacyr)
 spacy_initialize()
 
 timelines_meta <- timelines |> 
@@ -488,6 +492,8 @@ timelines_spacy <- timelines |>
   rowid_to_column("doc_id") |> 
   spacy_parse(entity = FALSE) |> 
   anti_join(get_stopwords(), by = c("token" = "word"))
+
+
 ```
 
 </details>
@@ -518,7 +524,6 @@ df |>
 
   b. Is there more words you should add to your stopwords list? Remove these terms using `filter(str_detect())` and a regex.
 
-
 <details>
   <summary>Solution. Click to expand!</summary>
 
@@ -535,7 +540,6 @@ df |>
 ```
 
 </details>
-
 
   c. Do the same thing but using the spacy output and filtering only `NOUN`s and `PROPN`ouns. 
   
@@ -577,6 +581,8 @@ timelines_spacy |>
     scale_y_reordered() +
     labs(y = "token") +
     facet_wrap(vars(party), scales = "free") 
+
+#timelines_spacy |> read_rds()
 ```
 
 </details>
