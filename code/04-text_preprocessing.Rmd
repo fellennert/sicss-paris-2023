@@ -8,9 +8,8 @@ As you could probably tell from its name, `tidytext` obeys the tidy data princip
 The `sotu` package contains all of the so-called "State of the Union" addresses -- the president gives them to the congress annually -- since 1790.
 
 ```{r message=FALSE, warning=FALSE}
-needs(hcandersenr, sotu, spacyr, stopwords, tidyverse, tidytext)
-library(tidyverse)
-library(sotu)
+needs(hcandersenr, SnowballC, sotu, spacyr, stopwords, tidyverse, tidytext)
+
 sotu_raw <- sotu_meta |> 
   mutate(text = sotu_text) |> 
   distinct(text, .keep_all = TRUE)
@@ -36,7 +35,6 @@ sotu_20cent_raw <- sotu_raw |>
 In a first step, I bring the data into a form that facilitates manipulation: a tidy tibble. For this, I use `tidytext`'s `unnest_tokens()` function. It basically breaks the corpus up into tokens -- the respective words. Let's demonstrate that with a brief, intuitive example.
 `
 ```{r}
-library(tidytext)
 toy_example <- tibble(
   text = "Look, this is a brief example for how tokenization works."
 )
@@ -88,7 +86,6 @@ The corpus now contains `r sotu_20cent_tokenized_nostopwords_nonumbers |> distin
 To decrease the complexity of the vocabulary even further, we can reduce the tokens to their stem using the `SnowballC` package and its function `wordStem()`:
 
 ```{r}
-library(SnowballC)
 sotu_20cent_tokenized_nostopwords_nonumbers_stemmed <- sotu_20cent_tokenized_nostopwords_nonumbers |> 
   mutate(token_stemmed = wordStem(token, language = "en"))
 
@@ -408,7 +405,80 @@ tfidf_vs_full |>
 
 While the `tidytext` format lends itself nicely to "basic" operations and visualizations, you will have to use different representations of text data for other applications such as topic models or word embeddings. On the other hand, you might want to harness, for instance, the `ggplot2` package for visualization. In this case, you will need to project the data into a tidy format. The former operations are performed using multiple `cast_.*()` functions, the latter using the `tidy()` function from the `broom` package whose purpose is to bring data from foreign structures to tidy representations.
 
-In the following, we will briefly explain common representations and the packages that use them. Thereby, we draw heavily on the [chapter in Tidy Text Mining with R that is dedicated to the topic](https://www.tidytextmining.com/dtm.html).  
+In the following, I will briefly explain common representations and the packages that use them. Thereby, I draw heavily on the [chapter in Tidy Text Mining with R that is dedicated to the topic](https://www.tidytextmining.com/dtm.html).  
+
+### Document-term matrix
+
+A document-term matrix contains rows that represent a document and columns that represent terms. The values usually correspond to how often the term appears in the respective document.
+
+In R, a common implementation of DTMs is the `DocumentTermMatrix` class in the `tm` package. The `topicmodels` package which we will use for performing LDA comes with a collection of example data.
+
+```{r}
+library(topicmodels)
+data("AssociatedPress")
+
+class(AssociatedPress)
+AssociatedPress
+```
+
+This data set contains 2246 Associated Press articles which consist of 10,473 different terms. Moreover, the matrix is 99% sparse, meaning that 99% of word-document pairs are zero. The weighting is by term frequency, hence the values correspond to the number of appearances a word has in an article.
+
+```{r}
+AssociatedPress |> 
+  head(2) |> 
+  as.matrix() %>%
+  .[, 1:10]
+```
+
+Bringing these data into a tidy format is performed as follows:
+
+```{r}
+associated_press_tidy <- tidy(AssociatedPress)
+
+glimpse(associated_press_tidy)
+```
+
+Transforming the data set into a DTM, the opposite operation, is achieved using `cast_dtm(data, document, term, value)`:
+
+```{r}
+associated_press_dfm <- associated_press_tidy |> 
+  cast_dtm(document, term, count)
+
+associated_press_dfm |> 
+  head(2) |> 
+  as.matrix() %>%
+  .[, 1:10]
+```
+
+### Document-feature matrix
+
+The so-called document-feature matrix is the data format used in the `quanteda` package. It is basically a document-term matrix, but the authors of the `quanteda` package chose the term feature over term to be more accurate: 
+
+> "We call them 'features' rather than terms, because features are more general than terms: they can be defined as raw terms, stemmed terms, the parts of speech of terms, terms after stopwords have been removed, or a dictionary class to which a term belongs. Features can be entirely general, such as ngrams or syntactic dependencies, and we leave this open-ended." 
+
+```{r}
+data("data_corpus_inaugural", package = "quanteda")
+inaug_dfm <- data_corpus_inaugural |>
+  quanteda::tokens() |>
+  quanteda::dfm(verbose = FALSE)
+
+inaug_dfm
+```
+
+This, again, can just be `tidy()`ed.
+
+```{r}
+inaug_tidy <- tidy(inaug_dfm)
+
+glimpse(inaug_tidy)
+```
+
+Of course, the resulting tibble can now be cast back into the DFM format using `cast_dfm(data, document, term, value)`. Here, the value corresponds to the number of appearances of the term in the respective document.
+
+```{r}
+inaug_tidy |> 
+  cast_dfm(document, term, count)
+```
 
 ### Corpus objects
 
@@ -422,7 +492,7 @@ acq
 #str(acq |> head(1))
 ```
 
-It is a list containing different elements that refer to metadata or the content. This is a nice and effective framework for storing documents, yet it does not lend itself nicely for analysis with tidy tools. You can use `tidy()` to clean it up a bit:
+It is basically a list containing different elements that refer to metadata or the content. This is a nice and effective framework for storing documents, yet it does not lend itself nicely for analysis with tidy tools. You can use `tidy()` to clean it up a bit:
 
 ```{r}
 acq_tbl <- acq |> 
@@ -457,191 +527,32 @@ timelines <- read_csv("https://www.dropbox.com/s/dpu5m3xqz4u4nv7/tweets_house_re
 keywords <- c("abortion", "prolife", " roe ", " wade ", "roevswade", "baby", "fetus", "womb", "prochoice", "leak")
 #filter(str_detect(text, str_c(keywords, collapse = "|"))) for keyword-based filtering
 ```
+```{r}
 
-
-<details>
-  <summary>Solution. Click to expand!</summary>
-
-```{r eval=FALSE}
-preprocessed <- timelines |> 
-  filter(str_detect(text, str_c(keywords, collapse = "|"))) |> 
-  unnest_tokens(word, text) |> 
-  anti_join(get_stopwords()) |> 
-  mutate(stemmed = wordStem(word))
 ```
 
-</details>
 
 2. Bonus: Perform the same steps, but using `spacyr`. What works better, lemmatization or stemming?
 
 
-<details>
-  <summary>Solution. Click to expand!</summary>
-
-```{r eval=FALSE}
-spacy_initialize()
-
-timelines_meta <- timelines |> 
-  filter(str_detect(text, str_c(keywords, collapse = "|"))) |> 
-  rowid_to_column("doc_id") |> 
-  select(-text)
-
-timelines_spacy <- timelines |> 
-  filter(str_detect(text, str_c(keywords, collapse = "|"))) |> 
-  select(text) |> 
-  rowid_to_column("doc_id") |> 
-  spacy_parse(entity = FALSE) |> 
-  anti_join(get_stopwords(), by = c("token" = "word"))
-
-
-```
-
-</details>
 
 3. Count the terms per party. 
-  a. Do you see party-specific differences with regard to their ten most common terms (hint: `slice_max(tf_idf, n = 10, with_ties = FALSE)`)? 
-
-<details>
-  <summary>Solution. Click to expand!</summary>
-
-```{r eval=FALSE}
-df <- preprocessed |> 
-  count(stemmed, party) |> 
-  group_by(party) |> 
-  slice_max(n, n = 10, with_ties = FALSE)
-  
-df |> 
-  group_by(party) |> 
-  ggplot()  +
-    geom_col(aes(x = n, y = reorder_within(stemmed, n, party))) +
-    scale_y_reordered() +
-    labs(y = "token") +
-    facet_wrap(vars(party), scales = "free") 
-```
-
-</details>
-
+  a. Do you see party-specific differences with regard to their ten most common terms (hint: use `group_by()` before using `slice_max(tf_idf, n = 10, with_ties = FALSE)`)? 
 
   b. Is there more words you should add to your stopwords list? Remove these terms using `filter(str_detect())` and a regex.
 
-<details>
-  <summary>Solution. Click to expand!</summary>
-
-```{r eval=FALSE}
-more_stopwords <- c("t.co", "http", "amp") 
-df |> 
-  filter(!str_detect(stemmed, str_c(more_stopwords, collapse = "|"))) |> 
-  group_by(party) |> 
-  ggplot()  +
-    geom_col(aes(x = n, y = reorder_within(stemmed, n, party))) +
-    scale_y_reordered() +
-    labs(y = "token") +
-    facet_wrap(vars(party), scales = "free") 
-```
-
-</details>
-
   c. Do the same thing but using the spacy output and filtering only `NOUN`s and `PROPN`ouns. 
-  
-<details>
-  <summary>Solution. Click to expand!</summary>
 
-```{r eval=FALSE}
-timelines_spacy |> 
-  filter(pos %in% c("PROPN", "NOUN")) |> 
-  left_join(timelines_meta |> mutate(doc_id = as.character(doc_id)), by = "doc_id") |> 
-  count(token, party) |>
-  group_by(party) |> 
-  slice_max(n, n = 10, with_ties = FALSE) |> 
-  ggplot()  +
-    geom_col(aes(x = n, y = reorder_within(token, n, party))) +
-    scale_y_reordered() +
-    labs(y = "token") +
-    facet_wrap(vars(party), scales = "free") 
+```{r}
+timelines_spacy <- read_rds("https://github.com/fellennert/sicss-paris-2023/raw/main/code/timelines_spacy.rds")
 ```
-
-</details>
 
   d. Again, is there stuff to be removed? Do so using a Regex.
   
-  
-<details>
-  <summary>Solution. Click to expand!</summary>
-
-```{r eval=FALSE}
-timelines_spacy |> 
-  filter(pos %in% c("PROPN", "NOUN"),
-         !str_detect(token, "^@|[^a-z]|^amp$")) |> 
-  left_join(timelines_meta |> mutate(doc_id = as.character(doc_id)), by = "doc_id") |> 
-  count(token, party) |>
-  group_by(party) |> 
-  slice_max(n, n = 10, with_ties = FALSE) |> 
-  ggplot()  +
-    geom_col(aes(x = n, y = reorder_within(token, n, party))) +
-    scale_y_reordered() +
-    labs(y = "token") +
-    facet_wrap(vars(party), scales = "free") 
-
-#timelines_spacy |> read_rds()
-```
-
-</details>
-
-
 4. Do the same thing as in 3. but use TF-IDF instead of raw counts. How does this alter your results?
-
-<details>
-  <summary>Solution. Click to expand!</summary>
-
-```{r eval=FALSE}
-df_tf_idf <- preprocessed |> 
-  count(word, party) |> 
-  bind_tf_idf(word, party, n) |> 
-  group_by(party) |> 
-  slice_max(tf_idf, n = 10, with_ties = FALSE)
-  
-df_tf_idf |> 
-  group_by(party) |> 
-  ggplot()  +
-    geom_col(aes(x = tf_idf, y = reorder_within(word, tf_idf, party))) +
-    scale_y_reordered() +
-    labs(y = "token") +
-    facet_wrap(vars(party), scales = "free") 
-
-
-timelines_spacy |> 
-  filter(pos %in% c("PROPN", "NOUN")) |> 
-  left_join(timelines_meta |> mutate(doc_id = as.character(doc_id)), by = "doc_id") |> 
-  count(token, party) |>
-  filter(str_detect(token, "[a-z]")) |> 
-  filter(!str_detect(token, "^@")) |> 
-  bind_tf_idf(token, party, n) |> 
-  group_by(party) |> 
-  slice_max(n, n = 10, with_ties = FALSE) |> 
-  ggplot()  +
-    geom_col(aes(x = tf_idf, y = reorder_within(token, tf_idf, party))) +
-    scale_y_reordered() +
-    labs(y = "token") +
-    facet_wrap(vars(party), scales = "free") 
-```
-
-</details>
 
 5. What else could you have done in terms of pre-processing (think of the special characters and syntax Twitter uses here)?
 
-
-<details>
-  <summary>Solution. Click to expand!</summary>
-  
 * Remove @… -- Regex: "[@][a-zA-Z0-9_]+"
 * Extract hashtags -- Regex: "[#][a-zA-Z0-9_]+"
 
-```{r}
-string <- "@FelixLennert checks if this works #sicss2023"
-
-str_remove_all(string, "[@][a-zA-Z0-9_]+")
-str_extract(string, "[#][a-zA-Z0-9_]+")
-```
-
-
-</details>
