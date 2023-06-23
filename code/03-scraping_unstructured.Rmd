@@ -465,44 +465,47 @@ while (session_page$response$status_code == 200) {
   Sys.sleep(2)
 }
 
-extract_content <- function(page){
-  tbl <- tibble(
-    rank = page |> 
-      html_elements(".text-primary") |> 
-      html_text2(),
-   title = page |> 
-      html_elements(".lister-item-header a") |> 
-      html_text2(),
-   url = page |> 
-      html_elements(".lister-item-header a") |> 
-      html_attr("href") |> 
-      str_c("https://www.imdb.com", x = _),
-   year = page |> 
-      html_elements(".text-muted.unbold") |> 
-      html_text2()
-   )
-  
-  rating <- page |> 
-      html_elements(".ratings-imdb-rating strong") |> 
-      html_text2() |> 
-      parse_double()
-  
-  if (length(rating) == 50){
-    return(tbl |> mutate(rating = rating))
-  }else{
-    return(list(tbl, rating))
-  }
+# extract the content (Kudos to Jakob Tures for coming up with this solution!)
+movies <- vector(mode = "list", length = length(content))
+
+for (i in seq_along(content)) {
+  movies[[i]] <- content[[i]] %>%
+    html_elements(css = "div.lister-item")
 }
 
-film_noir_list <- map(content, extract_content)
+movies <- content %>% 
+  unlist(recursive = FALSE) ## remove the outer level of the list -> list of 983 movies
 
-film_noir_list[[19]][[2]] <- c(film_noir_list[[19]][[2]][1:10], NA, film_noir_list[[19]][[2]][11:49])
-film_noir_list[[20]][[2]] <- c(film_noir_list[[20]][[2]][1:26], NA, film_noir_list[[20]][[2]][27:32])
+## now extract the data for each movie
+noir <- tibble(
+  rank = integer(),
+  title = character(),
+  url = character(),
+  rating = double()
+)
 
-film_noir_list[[19]] <- film_noir_list[[19]][[1]] |> mutate(rating = film_noir_list[[19]][[2]])
-film_noir_list[[20]] <- film_noir_list[[20]][[1]] |> mutate(rating = film_noir_list[[20]][[2]])
-
-film_noir_tbl <- film_noir_tbl |> bind_rows()
+for (i in seq_along(movies)) {
+  temp <- tibble(
+    rank = movies[[i]] %>% 
+      html_element(css = ".lister-item-index") %>% 
+      html_text() %>% 
+      parse_number(),
+    title = movies[[i]] %>% 
+      html_element(css = ".lister-item-header > a") %>% 
+      html_text(),
+    url = movies[[i]] %>% 
+      html_element(css = ".lister-item-header > a") %>% 
+      html_attr("href") %>% 
+      str_c("https://www.imdb.com", .),
+    rating = movies[[i]] %>% 
+      html_element((css = ".ratings-imdb-rating > strong")) %>% ## using html_element() instead of html_elements() returns an NA when the node couldn't be found
+      html_text() %>% 
+      parse_double()
+  )
+  
+  noir <- noir %>% 
+    bind_rows(temp)
+}
 
 # fix year
 film_noir_tbl |> 
