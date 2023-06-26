@@ -24,8 +24,6 @@ The first example for today's session is the IMDb data set. First, we load a who
 needs(discrim, glmnet, gutenbergr, ranger, textrecipes, themis, tidymodels, tidytext, tidyverse, tune, vip, workflows)
 
 imdb_data <- read_csv("https://www.dropbox.com/s/0cfr4rkthtfryyp/imdb_reviews.csv?dl=1")
-
-glimpse(imdb_data)
 ```
 
 ### Split the data
@@ -33,7 +31,6 @@ glimpse(imdb_data)
 The first step is to divide the data into training and test sets using `initial_split()`. You need to make sure that the test and training set are fairly balanced which is achieved by using `strata =`. `prop =` refers to the proportion of rows that make it into the training set.
 
 ```{r}
-set.seed(123)
 split <- initial_split(imdb_data, prop = 0.2, strata = sentiment)
 
 imdb_train <- training(split)
@@ -45,7 +42,7 @@ imdb_train |> count(sentiment)
 
 ### Pre-processing and featurization
 
-In the `tidymodels` framework, pre-processing and featurization are performed using so-called `recipes`. For text data, so-called `textrecipes` are available. 
+In the `tidymodels` framework, pre-processing and featurization are performed through so-called `recipes`. For text data, so-called `textrecipes` are available. 
 
 ### `textrecipes` -- basic example
 
@@ -174,11 +171,9 @@ We can also look at the words' weights that were learned by the model.
 
 ```{r}
 coefs <- imdb_lr_basic |> 
-  pull_workflow_fit() |> 
+  extract_fit_parsnip() |> 
   tidy() |> 
   mutate(term = str_remove(term, "^.?tfidf\\_text\\_"))
-
-View(coefs)
 ```
 
 Once we have the model, we can `augment()` it to our test set and predict:
@@ -192,7 +187,7 @@ mean(predictions_lr_imdb$sentiment == predictions_lr_imdb$.pred_class)
 
 ### Model evaluation
 
-In reality, now that a first model has been trained, its performance should not be evaluated on the test set. The test set is precious and should only be used once we are sure that we have found the best possible model. Hence, for these intermediary tuning steps, we need to come up with another solution. So-called cross-validation lends itself nicely to this task. The rationale behind it is that chunks from the training set are used as test sets. So, in the case of 10-fold cross-validation, the test set is divided into 10 distinctive chunks of data. Then, 10 models are trained on the respective 9/10 of the training set that is not used for evaluation. Finally, each model is evaluated against the respective held-out "test set" and the performance metrics averaged.
+Now that a first model has been trained, its performance can be evaluated. In theory, we have a test set for this. However, the test set is precious and should only be used once we are sure that we have found a good model. Hence, for these intermediary tuning steps, we need to come up with another solution. So-called cross-validation lends itself nicely to this task. The rationale behind it is that chunks from the training set are used as test sets. So, in the case of 10-fold cross-validation, the test set is divided into 10 distinctive chunks of data. Then, 10 models are trained on the respective 9/10 of the training set that is not used for evaluation. Finally, each model is evaluated against the respective held-out "test set" and the performance metrics averaged.
 
 ![Graph taken from https://scikit-learn.org/stable/modules/cross_validation.html/](https://scikit-learn.org/stable/_images/grid_search_cross_validation.png)
 
@@ -202,21 +197,17 @@ set.seed(123)
 imdb_folds <- vfold_cv(imdb_train)
 ```
 
-`fit_resamples()` trains models on the respective samples. (Note that for this to work, no model must have been fit to this workflow before. Hence, you either need to redefine the workflow first or restart the session and skip the fit-line from before.)
+`fit_resamples()` trains models on the respective samples. (Note that for this to work, no model must have been fit to this workflow before. Hence, you either need to define a new workflow first or restart the session and skip the fit-line from before.)
 
 ```{r eval=TRUE}
-imdb_nb_wf <- workflow() |> 
-  add_recipe(imdb_basic_recipe) |> 
-  add_model(nb_spec)
-
-imdb_nb_resampled <- fit_resamples(
-  imdb_nb_wf,
+imdb_lr_resampled <- fit_resamples(
+  imdb_lr_wf,
   imdb_folds,
   control = control_resamples(save_pred = TRUE),
   metrics = metric_set(accuracy, recall, precision)
 )
 
-#imdb_nb_resampled |> write_rds("imdb_nb_resampled.rds")
+#imdb_lr_resampled |> write_rds("imdb_lr_resampled.rds")
 ```
 
 `collect_metrics()` can be used to evaluate the results. 
@@ -230,14 +221,14 @@ In all cases, values close to 1 are better.
 `collect_predictions()` will give you the predicted values. 
 
 ```{r}
-nb_rs_metrics <- collect_metrics(imdb_nb_resampled)
-nb_rs_predictions <- collect_predictions(imdb_nb_resampled)
+lr_rs_metrics <- collect_metrics(imdb_lr_resampled)
+lr_rs_predictions <- collect_predictions(imdb_lr_resampled)
 ```
 
 This can also be used to create the confusion matrix by hand.
 
 ```{r}
-confusion_mat <- nb_rs_predictions |> 
+confusion_mat <- lr_rs_predictions |> 
   group_by(id) |> 
   mutate(confusion_class = case_when(.pred_class == "positive" & sentiment == "positive" ~ "TP",
                                      .pred_class == "positive" & sentiment == "negative" ~ "FP",
@@ -276,7 +267,7 @@ The `dials` [@kuhn_dials_2022] package provides the handy `grid_regular()` funct
 ```{r}
 lambda_grid <- grid_regular(
   penalty(range = c(-4, 0)), 
-  max_tokens(range = c(1000, 2000)),
+  max_tokens(range = c(1e3, 2e3)),
   levels = c(penalty = 3, max_tokens = 2)
 )
 ```
@@ -300,8 +291,6 @@ tune_lasso_rs <- tune_grid(
   grid = lambda_grid,
   metrics = metric_set(accuracy)
 )
-
-tune_lasso_rs <- read_rds("tune_lasso.rds")
 ```
 
 ```{r include=FALSE}
@@ -350,10 +339,9 @@ In a final step, we will also want to check how different features (i.e., words)
 ```{r}
 coef_tbl <- final_lasso_imdb |> 
   fit(imdb_train) |> 
-  pull_workflow_fit() |> 
+  extract_fit_parsnip() |> 
   tidy() |> 
-  mutate(term = str_remove(term, "^tf\\_text\\_")) |> 
-  arrange(-estimate)
+  mutate(term = str_remove(term, "^tf\\_text\\_"))
 ```
 
 Seems to make a lot of sense!
@@ -399,7 +387,7 @@ twitter_party_rf_workflow <- workflow() |>
 
 party_gb <- twitter_party_rf_workflow |> fit(data = party_tweets_train_gb)
 
-party_gb |> pull_workflow_fit() |> vip()
+party_gb |> extract_fit_parsnip() |> vip::vip()
 ```
 
 Now we have arrived at a model we can apply to make predictions using `augment()`. Finally, we can evaluate its accuracy on the test data by taking the share of correctly predicted values.
@@ -417,13 +405,10 @@ mean(predictions_gb$party == predictions_gb$.pred_class)
 
 ## Exercises
 
-### Supervised Machine Learning
-
-1. Train a new logistic regression model on the same IMDb data as in the first part -- but vary the preprocessing. Can you beat 80% accuracy?
+1. Train a new logistic regression model on the same IMDb data -- but vary the preprocessing. Can you beat 80% accuracy?
 
 ```{r eval=FALSE}
 set.seed(123)
-
 
 ## updated recipe, remove stopwords
 imdb_adv_recipe <- recipe(sentiment ~ text, data = imdb_train) |> 
@@ -453,13 +438,7 @@ mean(predictions_lr_imdb_adv$sentiment == predictions_lr_imdb_adv$.pred_class)
 ```{r eval=FALSE}
 timelines <- read_csv("https://www.dropbox.com/s/dpu5m3xqz4u4nv7/tweets_house_rep_party.csv?dl=1") |> filter(!is.na(party))
 
-rf_spec <- rand_forest(trees = 50) |>
-  set_engine("ranger", importance = "impurity") |> #to get important features
-  set_mode("classification") 
-
 ## train general model
-
-set.seed(123)
 
 split_us <- initial_split(timelines, prop = 0.1, strata = party)
 train_us <- training(split_us)
@@ -470,6 +449,10 @@ twitter_recipe <- recipe(party ~ text, data = train_us) |>
   themis::step_upsample(party) |> 
   step_tokenfilter(text, max_tokens = 1000) |>
   step_tfidf(text) 
+
+rf_spec <- rand_forest(trees = 50) |>
+  set_engine("ranger", importance = "impurity") |> #to get important features
+  set_mode("classification") 
 
 twitter_party_rf_workflow <- workflow() |> 
   add_recipe(twitter_recipe) |> 
@@ -483,7 +466,6 @@ mean(predictions_party_us$party == predictions_party_us$.pred_class)
 ## train abortion-based model
 
 keywords <- c("abortion", "prolife", " roe ", " wade ", "roevswade", "baby", "fetus", "womb", "prochoice", "leak")
-
 timelines_us_abortion <- timelines |> filter(str_detect(text, keywords |> str_c(collapse = "|")))
 
 split_us_abortion <- initial_split(timelines_us_abortion, prop = 0.8, strata = party)
@@ -495,7 +477,7 @@ abortion_us <- twitter_party_rf_workflow |> fit(data = abortion_tweets_train_us)
 predictions_abortion_us <- augment(abortion_us, abortion_tweets_test_us)
 mean(predictions_abortion_us$party == predictions_abortion_us$.pred_class)
 
-## compare important terms
+## compare accuracies
 
 model_us |> extract_fit_parsnip() |> vip()
 abortion_us |> extract_fit_parsnip() |> vip()
