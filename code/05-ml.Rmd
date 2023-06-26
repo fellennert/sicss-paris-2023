@@ -459,6 +459,8 @@ rf_spec <- rand_forest(trees = 50) |>
 
 ## train general model
 
+set.seed(123)
+
 split_us <- initial_split(timelines, prop = 0.1, strata = party)
 train_us <- training(split_us)
 test_us <- testing(split_us)
@@ -493,7 +495,7 @@ abortion_us <- twitter_party_rf_workflow |> fit(data = abortion_tweets_train_us)
 predictions_abortion_us <- augment(abortion_us, abortion_tweets_test_us)
 mean(predictions_abortion_us$party == predictions_abortion_us$.pred_class)
 
-## compare accuracies
+## compare important terms
 
 model_us |> extract_fit_parsnip() |> vip()
 abortion_us |> extract_fit_parsnip() |> vip()
