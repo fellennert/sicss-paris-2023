@@ -453,8 +453,48 @@ mean(predictions_lr_imdb_adv$sentiment == predictions_lr_imdb_adv$.pred_class)
 ```{r eval=FALSE}
 timelines <- read_csv("https://www.dropbox.com/s/dpu5m3xqz4u4nv7/tweets_house_rep_party.csv?dl=1") |> filter(!is.na(party))
 
+rf_spec <- rand_forest(trees = 50) |>
+  set_engine("ranger", importance = "impurity") |> #to get important features
+  set_mode("classification") 
+
+## train general model
+
+split_us <- initial_split(timelines, prop = 0.1, strata = party)
+train_us <- training(split_us)
+test_us <- testing(split_us)
+
+twitter_recipe <- recipe(party ~ text, data = train_us) |> 
+  step_tokenize(text) |> # tokenize text
+  themis::step_upsample(party) |> 
+  step_tokenfilter(text, max_tokens = 1000) |>
+  step_tfidf(text) 
+
+twitter_party_rf_workflow <- workflow() |> 
+  add_recipe(twitter_recipe) |> 
+  add_model(rf_spec)
+
+model_us <- twitter_party_rf_workflow |> fit(data = train_us)
+
+predictions_party_us <- augment(model_us, test_us)
+mean(predictions_party_us$party == predictions_party_us$.pred_class)
+
 ## train abortion-based model
 
 keywords <- c("abortion", "prolife", " roe ", " wade ", "roevswade", "baby", "fetus", "womb", "prochoice", "leak")
+
 timelines_us_abortion <- timelines |> filter(str_detect(text, keywords |> str_c(collapse = "|")))
+
+split_us_abortion <- initial_split(timelines_us_abortion, prop = 0.8, strata = party)
+abortion_tweets_train_us <- training(split_us_abortion)
+abortion_tweets_test_us <- testing(split_us_abortion)
+
+abortion_us <- twitter_party_rf_workflow |> fit(data = abortion_tweets_train_us)
+
+predictions_abortion_us <- augment(abortion_us, abortion_tweets_test_us)
+mean(predictions_abortion_us$party == predictions_abortion_us$.pred_class)
+
+## compare accuracies
+
+model_us |> extract_fit_parsnip() |> vip()
+abortion_us |> extract_fit_parsnip() |> vip()
 ```
