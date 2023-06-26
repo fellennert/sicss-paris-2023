@@ -13,8 +13,8 @@ The following list connects the corresponding files:
 * Day 3: scraping structured content from the web ([slides: structured scraping](slides/3-SICSS2023-Structured.html), [R material: scraping structured](code/02-scraping_structured.Rmd))
 * Day 4: scraping unstructured content from the web ([slides](slides/3-SICSS2023-Structured.html), [R material](code/03-scraping_unstructured.Rmd))
 * Day 5: NLP I ([slides](slides/5-SICSS2023-NLP1.pdf), [R material](code/04-text_preprocessing.Rmd))
-* Day 6: NLP II (slides, R material)
-* Day 7: NLP III (slides, R material)
+* Day 6: NLP II ([slides](slides/6-SICSS2023-embeddings.pdf), R material)
+* Day 7: NLP III ([slides](slides/7-SICSS2023-transformers.pdf), R material)
 * Day 8: The Augmented Social Scientist (Google Colab)
 
 
