@@ -39,7 +39,7 @@ imdb_test <- testing(split) |> slice_sample(n = 500)
 
 imdb_ft_recipe <- recipe(sentiment ~ text, data = imdb_train) |> 
   step_tokenize(text) |> # first step: tokenize text
-  step_word_embeddings(text, embeddings = fasttext) 
+  step_word_embeddings(text, embeddings = fasttext_tbl) 
 
 rf_spec <- rand_forest(trees = 50) |>
   set_engine("ranger", importance = "impurity") |> #to get important features
@@ -128,6 +128,9 @@ best_match("France", 10)
 best_match("Felix", 10)
 best_match("Étienne", 10)
 best_match("Julien", 10)
+
+best_match("Macron", 10)
+best_match("immigration", 10)
 ```
 
 We can also adapt the function to do some semantic algebra:
@@ -196,6 +199,10 @@ name_query <- c("Julien", "Etienne", "Félix",
 job_query <- c("economist", "sociologist", "psychologist", "anthropologist", 
                "historian", "geographer", "archeologist", "theologist")
 
+animal_query <- c("horse", "cat", "rat", "duck", "chimpanzee", "platypus", 
+             "capybara", "octopus", "dolphin", "fox", "goose", "pigeon",
+             "spider", "otter", "human")
+
 
 music_pca <- prcomp(fasttext_mat[music_query, ]) |> 
   pluck("x") |> 
@@ -212,6 +219,11 @@ job_pca <- prcomp(fasttext_mat[job_query, ]) |>
   as_tibble(rownames = NA) |> 
   rownames_to_column("name")
 
+animal_pca <- prcomp(fasttext_mat[animal_query, ]) |> 
+  pluck("x") |> 
+  as_tibble(rownames = NA) |> 
+  rownames_to_column("name")
+
 music_pca |> 
   ggplot() +
   geom_label_repel(aes(PC1, PC2, label = name))
@@ -220,9 +232,9 @@ name_pca |>
   ggplot() +
   geom_label_repel(aes(PC1, PC2, label = name))
 
-job_pca |> 
+animal_pca |> 
   ggplot() +
-  geom_label_repel(aes(PC1, PC2, label = name))
+  geom_label(aes(PC1, PC2, label = name))
 ```
 
 ## Train your own models
@@ -253,8 +265,8 @@ male_text <- male$text |> str_c(collapse = " ")
 female <- joined_names |> pluck(2) |> pull(gutenberg_id) |> gutenberg_download()
 female_text <- female$text |> str_c(collapse = " ")
 
-#male_text |> write_rds("male_text.rds")
-#female_text |> write_rds("female_text.rds")
+male_text <- read_rds("male_text.rds")
+female_text <- read_rds("female_text.rds")
 ```
 
 Once we have acquired the text, we can train the models. Here, we will use the `GloVe` algorithm and lower dimensions. The `wordsalad` package provides us with an implementation.
