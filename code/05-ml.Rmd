@@ -200,14 +200,14 @@ imdb_folds <- vfold_cv(imdb_train)
 `fit_resamples()` trains models on the respective samples. (Note that for this to work, no model must have been fit to this workflow before. Hence, you either need to define a new workflow first or restart the session and skip the fit-line from before.)
 
 ```{r eval=TRUE}
-imdb_lr_resampled <- fit_resamples(
-  imdb_lr_wf,
+imdb_nb_resampled <- fit_resamples(
+  imdb_nb_wf,
   imdb_folds,
   control = control_resamples(save_pred = TRUE),
   metrics = metric_set(accuracy, recall, precision)
 )
 
-#imdb_lr_resampled |> write_rds("imdb_lr_resampled.rds")
+#imdb_nb_resampled |> write_rds("imdb_nb_resampled.rds")
 ```
 
 `collect_metrics()` can be used to evaluate the results. 
@@ -221,14 +221,14 @@ In all cases, values close to 1 are better.
 `collect_predictions()` will give you the predicted values. 
 
 ```{r}
-lr_rs_metrics <- collect_metrics(imdb_lr_resampled)
-lr_rs_predictions <- collect_predictions(imdb_lr_resampled)
+nb_rs_metrics <- collect_metrics(imdb_nb_resampled)
+nb_rs_predictions <- collect_predictions(imdb_nb_resampled)
 ```
 
 This can also be used to create the confusion matrix by hand.
 
 ```{r}
-confusion_mat <- lr_rs_predictions |> 
+confusion_mat <- nb_rs_predictions |> 
   group_by(id) |> 
   mutate(confusion_class = case_when(.pred_class == "positive" & sentiment == "positive" ~ "TP",
                                      .pred_class == "positive" & sentiment == "negative" ~ "FP",

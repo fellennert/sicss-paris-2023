@@ -1,0 +1,309 @@
+# Word Embeddings {#day7}
+
+This session on word embeddings will conclude the script. Word embeddings are a fairly new technique that massively contributed to the progress the field of NLP has made over the last years. Their idea is basically that words can be embedded in a vector space in such a way that their real-life relationships are retained. This means for instance that words that co-appear in similar contexts are more similar -- or have greater cosine similarity -- than the ones that don't. Also synonyms will be very similar. 
+
+In the following script, we will first use pre-trained (fasttext) embeddings to explain general applications for embeddings (prediction -- in combination with the `tidymodels` framework -- and extraction of word relationships). Thereafter we will move on to train our own embeddings to look at a typical application from the sociology of culture: determining how language is different across groups. In our particular case we will look at how certain gender stereotypes may be different in a sample of works of male and female authors downloaded using the `gutenbergr` package (and therefore quite old).
+
+## Pretrained embeddings
+
+We will work with the fastText pretrained embeddings for English. They are downloaded once you click [this link](https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.en.300.vec.gz). Since they are huge, I will have to load them from my disc. I use `data.table::fread()` here.
+
+```{r}
+needs(gutenbergr, gender, wordsalad, tidymodels, tidyverse, textrecipes, data.table, vip, ggrepel)
+set.seed(123)
+
+fasttext <- data.table::fread("/Users/felixlennert/Desktop/cc.en.300.vec", 
+                              quote ="", 
+                              skip = 1, 
+                              data.table = F, 
+                              nrows = 5e5)
+```
+
+Before I can use them for prediction, I have to convert them to a tibble so that `tidymodels` can work with them: 
+
+```{r}
+fasttext_tbl <- fasttext |> 
+  as_tibble() |> 
+  rename_with(\(x) str_c("d", 1:300), where(is.numeric))
+```
+
+Then, the process is straightforward: we do the split, define the workflow, fit the model, evaluate it. The only difference is that the only steps we perform in the recipe are `step_tokenize()` and `step_word_embeddings()`.
+
+```{r}
+imdb_data <- read_csv("https://www.dropbox.com/s/0cfr4rkthtfryyp/imdb_reviews.csv?dl=1")
+
+split <- initial_split(imdb_data, prop = 0.01, strata = sentiment)
+
+imdb_train <- training(split)
+imdb_test <- testing(split) |> slice_sample(n = 500)
+
+imdb_ft_recipe <- recipe(sentiment ~ text, data = imdb_train) |> 
+  step_tokenize(text) |> # first step: tokenize text
+  step_word_embeddings(text, embeddings = fasttext) 
+
+rf_spec <- rand_forest(trees = 50) |>
+  set_engine("ranger", importance = "impurity") |> #to get important features
+  set_mode("classification") 
+
+imdb_ft_workflow <- workflow() |> 
+  add_recipe(imdb_ft_recipe) |> 
+  add_model(rf_spec)
+
+
+imdb_ft_model <- imdb_ft_workflow |> fit(data = imdb_train)
+
+imdb_ft_model |> extract_fit_parsnip() |> vip()
+
+predictions_imdb_ft <- augment(imdb_ft_model, imdb_test)
+```
+
+The embeddings will then become document embeddings -- the documents' words' vector values will be averaged for each dimension. Therefore, each document will be positioned in a 300-dimensional space based on its words' averaged vectors.
+
+```{r}
+imdb_ft_recipe |> 
+  prep() |> 
+  bake(new_data = NULL)
+```
+
+Let's compare it against a basic bag-of-words model.
+
+```{r}
+imdb_basic_recipe <- recipe(sentiment ~ text, data = imdb_train) |> 
+  step_tokenize(text) |> # first step: tokenize text
+  step_tokenfilter(text, max_tokens = 1000) |> 
+  step_tf(text)
+
+imdb_basic_workflow <- workflow() |> 
+  add_recipe(imdb_basic_recipe) |> 
+  add_model(rf_spec)
+
+imdb_basic_model <- imdb_basic_workflow |> fit(data = imdb_train)
+
+predictions_imdb_ft <- augment(imdb_ft_model, imdb_test)
+predictions_imdb_basic <- augment(imdb_basic_model, imdb_test)
+
+mean(predictions_imdb_ft$sentiment == predictions_imdb_ft$.pred_class)
+mean(predictions_imdb_basic$sentiment == predictions_imdb_basic$.pred_class)
+```
+
+This is actually faring worse than the bag-of-words model. So well, probably no silver bullet. Luckily, we have some sharper tools in our sheds these days, such as transformer-based models.
+
+## Vector Algebra with pre-trained models
+
+### Word similarities 
+
+But let's further investigate what's going on under the hood of our fastText embeddings. We can use them to check out all things related to similarity of words: we can look for synonyms, investigate their relationships, and also visualize these quite conveniently by harnessing the power of dimensionality reduction.
+
+What is powering these things is so-called cosine similarity: two vectors are the same if they "look into the same direction." Cosine similarity is 0 if two vectors are orthogonal (90 degree angle), 1 if they are perfectly aligned, and -1 if they show in opposite directions. 
+
+Here, we will operate on the matrix as this is considerably faster than working with tibbles and `dplyr` function. For this, we first need to prepare the matrix.
+
+```{r}
+wordnames <- fasttext$V1
+fasttext_mat <- as.matrix(fasttext[, -1])
+rownames(fasttext_mat) <- wordnames
+```
+
+In a first task, we want to extract the best matches for a given word. Hence, we need a function that first calculates the cosine similarities of our term and then extracts the ones that actually have the highest cosine similarity.
+
+```{r}
+## Function to get best matches
+norms <- sqrt(rowSums(fasttext_mat^2)) # calculate length of vectors for normalization
+best_match <- function(term, n = 5){
+  x <- fasttext_mat[term, ]
+  cosine <- (fasttext_mat %*% as.matrix(x)) / (norms * sqrt(sum(x^2))) # calculate cosine similarities between term in question and all the others
+  best_n <- order(cosine, decreasing = T)[1:n] #extract highest n cosines
+  tibble(
+    word = rownames(fasttext_mat)[best_n], 
+    cosine = cosine[best_n]
+    )
+}
+```
+
+Let's check out some matches:
+
+```{r}
+best_match("France", 10)
+
+best_match("Felix", 10)
+best_match("Étienne", 10)
+best_match("Julien", 10)
+```
+
+We can also adapt the function to do some semantic algebra:
+
+$$King - Man = ? - Woman$$
+$$King - Man + Woman = ?$$
+
+```{r}
+semantic_algebra <- function(term_1, term_2, term_3, n = 5){
+  x <- fasttext_mat[term_1, ] - fasttext_mat[term_2, ] + fasttext_mat[term_3, ]
+  cosine <- (fasttext_mat %*% as.matrix(x)) / (norms * sqrt(sum(x^2))) # calculate cosine similarities between term in question and all the others
+  best_n <- order(cosine, decreasing = T)[1:n] #extract highest n cosines
+  tibble(
+    word = rownames(fasttext_mat)[best_n], 
+    cosine = cosine[best_n]
+    )
+}
+
+semantic_algebra("king", "man", "woman")
+semantic_algebra("France", "Paris", "Rome")
+```
+
+### Investigating biases
+
+Quite in the same vein, we can also use vector algebra to investigate all different kinds of biases in language. The idea is to form certain dimensions or axes that relate to real-world spectra. Examples would be social class ("poor -- rich"), gender ("male -- female"), age ("young -- old").
+
+```{r}
+investigate_bias <- function(axis_term_1, axis_term_2, term_in_question){
+  x <- fasttext_mat[axis_term_2, ] - fasttext_mat[axis_term_1, ]
+  tibble(
+    axis_term_1 = axis_term_1,
+    axis_term_2 = axis_term_2,
+    term = term_in_question,
+    cosine = lsa::cosine(x, fasttext_mat[term_in_question, ])
+  )
+}
+
+investigate_bias("male", "female", "carpenter")
+investigate_bias("male", "female", "secretary")
+
+investigate_bias("male", "female", "stallion")
+investigate_bias("male", "female", "mare")
+
+investigate_bias("male", "female", "Felix")
+investigate_bias("male", "female", "Felicia")
+```
+
+### Dimensionality Reduction
+
+We can also reduce the dimensionality and put the terms into a two-dimensional representation (which is a bit easier to interpret for humans). To do this we perform a Principal Component Analysis and retain the first two components.
+
+```{r}
+music_query <- c("Bach", "Mozart", "Haendel", "Verdi", "Bizet", "Poulenc", "Debussy", 
+                 "Tupac", "Eminem", "Wu-Tang", 
+                 "Coltrane", "Miles", "Armstrong", "Ellington", "Dolphy", "Hawkins")
+
+name_query <- c("Julien", "Etienne", "Félix", 
+                "Marie", "Anne", "Camille", 
+                "Panagiotis", "Nikos", "Vassilis",
+                "Maria", "Eugenia", "Myrto",
+                "Khaled", "Karim", "Abdellatif",
+                "Khalida", "Karima", "Aminata", 
+                "Gunther", "Gunnar", "Anders", 
+                "Greta", "Ursula", "Helga")
+
+job_query <- c("economist", "sociologist", "psychologist", "anthropologist", 
+               "historian", "geographer", "archeologist", "theologist")
+
+
+music_pca <- prcomp(fasttext_mat[music_query, ]) |> 
+  pluck("x") |> 
+  as_tibble(rownames = NA) |> 
+  rownames_to_column("name")
+
+name_pca <- prcomp(fasttext_mat[name_query, ]) |> 
+  pluck("x") |> 
+  as_tibble(rownames = NA) |> 
+  rownames_to_column("name")
+
+job_pca <- prcomp(fasttext_mat[job_query, ]) |> 
+  pluck("x") |> 
+  as_tibble(rownames = NA) |> 
+  rownames_to_column("name")
+
+music_pca |> 
+  ggplot() +
+  geom_label_repel(aes(PC1, PC2, label = name))
+
+name_pca |> 
+  ggplot() +
+  geom_label_repel(aes(PC1, PC2, label = name))
+
+job_pca |> 
+  ggplot() +
+  geom_label_repel(aes(PC1, PC2, label = name))
+```
+
+## Train your own models
+
+So far, this is all fun and games, but not so much suited for our research. If we want to do this, we need to be able to train the models ourselves. Then we can, for instance, systematically investigate the biases certain authors that bear certain traits (e.g., political leaning, born in the same century, same gender, skin color, etc.) have and how they compare to each other. 
+
+However, training these model requires a significant amount of text and a bit of computing power. Hence, in this example, we will look at books. This will give us some text. However, the books are all quite old -- given that they come from the Gutenberg project (`gutenbergr`) and are therefore >70 years old. Also, we have little meta information on the authors. I will therefore use the `gender` package to infer their gender. 
+
+```{r}
+set.seed(123)
+
+first_names <- gutenberg_metadata |> 
+  filter(language == "en") |> 
+  mutate(first_name = str_extract(author, "(?<=\\, )\\w+") |> 
+           str_squish()) |> 
+  replace_na(list(first_name = " ")) 
+
+joined_names <- first_names |> 
+  left_join(gender(first_names$first_name), by = c("first_name" = "name")) |> 
+  distinct(gutenberg_id, .keep_all = TRUE) |> 
+  drop_na(gender) |> 
+  group_by(gender) |> 
+  slice_sample(n = 100) |> 
+  group_split()
+
+male <- joined_names |> pluck(1) |> pull(gutenberg_id) |> gutenberg_download()
+male_text <- male$text |> str_c(collapse = " ")
+female <- joined_names |> pluck(2) |> pull(gutenberg_id) |> gutenberg_download()
+female_text <- female$text |> str_c(collapse = " ")
+
+male_text |> write_rds("male_text.rds")
+female_text |> write_rds("female_text.rds")
+```
+
+Once we have acquired the text, we can train the models. Here, we will use the `GloVe` algorithm and lower dimensions. The `wordsalad` package provides us with an implementation.
+
+```{r}
+male_emb <- wordsalad::glove(male_text |> str_remove_all("[:punct:]") |> str_to_lower())
+male_emb_mat <- as.matrix(male_emb[, 2:11])
+rownames(male_emb_mat) <- male_emb$tokens
+
+female_emb <- wordsalad::glove(female_text |> str_remove_all("[:punct:]") |> str_to_lower())
+female_emb_mat <- as.matrix(female_emb[, 2:11])
+rownames(female_emb_mat) <- female_emb$tokens
+```
+
+Now we can use these matrices just as the pretrained matrix before and start to investigate different biases systematically. However, these biases are of course quite dependent on the choice of corpus. One way to mitigate this and to check the stability and robustness of the estimate would be a bootstrapping approach. Thereby, multiple models are trained with randomly sampled 95% of text units (e.g., sentences). Then, the bias estimates are calculated for each model and compared (see Antoniak and Mimno 2018).
+
+## Further links
+
+This is just a quick demonstration of what you can do with word embeddings. In case you want to use your embeddings as new features for your supervised machine learning classifier, look at `?textmodels::step_word_embeddings()`. You may want to use pre-trained models for such tasks.
+
+You can also train embeddings on multiple corpora and identify their different biases. You may want to have a look at @stoltz_cultural_2021 before going down this road.
+
+* See the [word2vec vignette](https://cran.r-project.org/web/packages/word2vec/readme/README.html) for more information
+* The first of a series of [blog posts on word embeddings](https://ruder.io/word-embeddings-1/)
+* An approachable [lecture by Richard Socher, one of the founding fathers of GloVe](https://www.youtube.com/watch?v=T8tQZChniMk&%20index=2&list=PLo0lw6BstMGYXGeVpJyOyHOAdEUE7BsUp)
+
+## Exercises
+
+1. Check out some analogies using the fastText embeddings. 
+
+```{r}
+
+```
+
+2. Try to come up with your own axes. Play around and position words on them. Do your results always make sense? Inspiration can for instance be found in the works of Kozlowski, Taddy, and Evans (2018), or Garg et al. 2018. Or in the slides of Julien Boelaert himself.
+
+```{r}
+
+```
+
+3. Perform some queries on the PCA approach -- do you find some good explanations for the patterns you see?
+
+```{r}
+
+```
+
+4. Compare the models we trained with the male- and female-authored corpora with regard to how "real-world gender-biased things" are biased in their texts. The functions from above will still work. Do you find differences?
+
+```{r}
+
+```
+
