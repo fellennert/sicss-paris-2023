@@ -253,8 +253,8 @@ male_text <- male$text |> str_c(collapse = " ")
 female <- joined_names |> pluck(2) |> pull(gutenberg_id) |> gutenberg_download()
 female_text <- female$text |> str_c(collapse = " ")
 
-male_text |> write_rds("male_text.rds")
-female_text |> write_rds("female_text.rds")
+#male_text |> write_rds("male_text.rds")
+#female_text |> write_rds("female_text.rds")
 ```
 
 Once we have acquired the text, we can train the models. Here, we will use the `GloVe` algorithm and lower dimensions. The `wordsalad` package provides us with an implementation.
