@@ -15,7 +15,7 @@ The following list connects the corresponding files:
 * Day 5: NLP I ([slides](slides/5-SICSS2023-NLP1.pdf), [R material](code/04-text_preprocessing.Rmd))
 * Day 6: NLP II ([slides](slides/6-SICSS2023-embeddings.pdf), [R material](code/05-ml.Rmd))
 * Day 7: NLP III ([slides](slides/7-SICSS2023-transformers.pdf), [R material](code/06-word-embeddings.Rmd))
-* Day 8: The Augmented Social Scientist (Google Colab)
+* Day 8: The Augmented Social Scientist ([Tutorial](https://www.css.cnrs.fr/the-augmented-social-scientist-tutorial-at-ic2s2/))
 
 
 The solutions to the exercises are included in the bookdown script but not in the "raw" RMD scripts.
